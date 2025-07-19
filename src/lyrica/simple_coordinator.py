@@ -53,10 +53,9 @@ while True:
                 continue
         
         logger.info(f"Processed {processed_count} mentions")
-        
-        bsky.mark_seen()
+        logger.info("~=" * 25)
         
     except Exception as e:
         logger.error(f"Error in main loop: {e}")
     
-    time.sleep(5)
+    time.sleep(20)

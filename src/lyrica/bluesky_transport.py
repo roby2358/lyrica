@@ -37,6 +37,22 @@ class BlueskyTransport:
         logger.warning(f"Text too long ({len(text)} chars), truncating to {300} chars")
         return text[:296] + "..."
 
+    def mark_seen(self):
+        logger.info("Marking notifications as seen")
+        
+        seen_at = self.client.get_current_time_iso()
+        
+        self.client.app.bsky.notification.update_seen({"seenAt": seen_at})
+        logger.info("Notifications marked as seen")
+
+    def _should_reply(self, notification):
+        """Determine if a notification should trigger a reply."""
+        if getattr(notification, 'isRead', getattr(notification, 'is_read', False)):
+            return False
+        if getattr(notification, 'reason', '') not in ["mention"]:
+            return False
+        return True
+
     def fetch_mentions(self):
         logger.info("Fetching mentions from Bluesky")
 
@@ -46,19 +62,21 @@ class BlueskyTransport:
             params['cursor'] = cursor
         
         res = self.client.app.bsky.notification.list_notifications(**params)
-        
-        self.pending_cursor = getattr(res, "cursor", None)
-        self._save_cursor(self.pending_cursor)
+
+        self.mark_seen()
+
+        pending_cursor = getattr(res, "cursor", None)
+        self._save_cursor(pending_cursor)
         
         mention_count = 0
         mentions_to_process = []
         
-        for n in res.notifications:
-            if n.reason == "mention":
-                mention_count += 1
-                logger.info(f"Found mention from @{getattr(n.author, 'handle', 'unknown')}")
-                mentions_to_process.append(n)
-        
+        mentions_to_process = [
+            n for n in res.notifications 
+            if self._should_reply(n)
+        ]
+        mention_count = len(mentions_to_process)
+
         logger.info(f"Found {mention_count} new mentions to process")
         return mentions_to_process
 
@@ -66,27 +84,23 @@ class BlueskyTransport:
         logger.info(f"Sending reply to {getattr(reply_to, 'uri', 'unknown URI')}")
         logger.debug(f"Reply text: {len(text)} chars: {text[:100]}...")
         
-        if len(text) >= 300:
+        if len(text) > 300:
             text = self._truncate_text(text)
         
+        # Determine the correct thread root. If the post we are replying to is itself part of a
+        # thread, use its recorded root; otherwise the post itself is the root.
+        root_uri = reply_to.uri
+        root_cid = reply_to.cid
+
+        # `reply_to.record.reply` is present when the original post is a reply to another post.
+        original_reply = getattr(getattr(reply_to, "record", None), "reply", None)
+        if original_reply and original_reply.root:
+            root_uri = original_reply.root.uri
+            root_cid = original_reply.root.cid
+
         reply_ref = models.AppBskyFeedPost.ReplyRef(
-            root=models.ComAtprotoRepoStrongRef.Main(
-                uri=reply_to.uri,
-                cid=reply_to.cid
-            ),
-            parent=models.ComAtprotoRepoStrongRef.Main(
-                uri=reply_to.uri,
-                cid=reply_to.cid
-            )
+            root=models.ComAtprotoRepoStrongRef.Main(uri=root_uri, cid=root_cid),
+            parent=models.ComAtprotoRepoStrongRef.Main(uri=reply_to.uri, cid=reply_to.cid)
         )
         self.client.send_post(text, reply_to=reply_ref)
         logger.info(f"Reply sent {reply_to} : {text}")
-
-    def mark_seen(self):
-        logger.info("Marking notifications as seen")
-        
-        # Use the client's built-in time method for consistency
-        seen_at = self.client.get_current_time_iso()
-        
-        self.client.app.bsky.notification.update_seen({"seenAt": seen_at})
-        logger.info("Notifications marked as seen")
