@@ -3,3 +3,5 @@ credentials.toml
 
 # Cursor file for tracking API pagination state
 cursor.txt
+/.idea/
+/.venv/
