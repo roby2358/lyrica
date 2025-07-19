@@ -9,6 +9,8 @@ logging.basicConfig(
     stream=sys.stderr
 )
 
+logger = logging.getLogger(__name__)
+
 # Import appropriate TOML library based on Python version
 if sys.version_info >= (3, 11):
     import tomllib
@@ -16,7 +18,8 @@ else:
     import tomli as tomllib
 
 from .bluesky_transport import BlueskyTransport
-from my_llm import craft_reply          # your OpenAI call, Claude, etc.
+from .ai_brain import AiBrain
+from .introspection import introspect_object
 
 # Load credentials from TOML file
 credentials_path = Path("credentials.toml")
@@ -25,10 +28,38 @@ with open(credentials_path, "rb") as f:
 
 bsky = BlueskyTransport(credentials["bluesky"]["handle"],
                         credentials["bluesky"]["app_password"])
+brain = AiBrain(credentials["anthropic"]["api_key"])
 
 while True:
-    for note in bsky.fetch_mentions():
-        text = craft_reply(note["text"], note["author"]["handle"])
-        bsky.reply(text, note)
-    bsky.mark_seen()
-    time.sleep(30)
+    try:
+        mentions = bsky.fetch_mentions()
+        processed_count = 0
+        
+        for note in mentions:
+            try:
+                # Deep introspection of the notification object
+                logger.info("=" * 50)
+                logger.info(f"PROCESSING NOTIFICATION {processed_count + 1}")
+                logger.info("=" * 50)
+                introspect_object(note, "notification", max_depth=3)
+                logger.info("=" * 50)
+                
+                # pessimistically mark as processed
+                bsky.mark_processed(note)
+                text = brain.craft_reply(note.record.text, note.author.handle)
+                bsky.reply(text, note)
+                processed_count += 1
+                logger.info(f"Successfully processed mention {processed_count} of {len(mentions)}")
+            except Exception as e:
+                logger.error(f"Failed to process mention from @{getattr(note.author, 'handle', 'unknown')}: {e}")
+                continue
+        
+        bsky.commit_progress()
+        logger.info(f"Committed progress after processing {processed_count} mentions")
+        
+        bsky.mark_seen()
+        
+    except Exception as e:
+        logger.error(f"Error in main loop: {e}")
+    
+    time.sleep(5)

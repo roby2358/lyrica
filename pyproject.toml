@@ -13,6 +13,7 @@ dependencies = [
     "python-dotenv",
     "tomli; python_version<'3.11'",
     "tomli-w; python_version>='3.11'",
+    "anthropic",
 ]
 
 [project.optional-dependencies]
