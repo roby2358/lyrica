@@ -8,6 +8,10 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+# Model configuration
+ANTHROPIC_MODEL = "claude-3-haiku-20240307"
+# ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
+
 
 class AiBrain:
     def __init__(self, api_key, system_prompt_path="resources/prompts/system.txt", user_prompt_path="resources/prompts/user.txt"):
@@ -47,7 +51,7 @@ class AiBrain:
         
         try:
             response = self.client.messages.create(
-                model="claude-3-5-haiku-20241022",
+                model=ANTHROPIC_MODEL,
                 max_tokens=200,
                 system=self.system_prompt,
                 messages=[
