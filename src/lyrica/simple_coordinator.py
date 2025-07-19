@@ -44,8 +44,6 @@ while True:
                 introspect_object(note, "notification", max_depth=3)
                 logger.info("=" * 50)
                 
-                # pessimistically mark as processed
-                bsky.mark_processed(note)
                 text = brain.craft_reply(note.record.text, note.author.handle)
                 bsky.reply(text, note)
                 processed_count += 1
@@ -54,8 +52,7 @@ while True:
                 logger.error(f"Failed to process mention from @{getattr(note.author, 'handle', 'unknown')}: {e}")
                 continue
         
-        bsky.commit_progress()
-        logger.info(f"Committed progress after processing {processed_count} mentions")
+        logger.info(f"Processed {processed_count} mentions")
         
         bsky.mark_seen()
         

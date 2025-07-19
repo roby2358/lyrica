@@ -14,7 +14,6 @@ class BlueskyTransport:
         logger.info("Successfully logged in to Bluesky")
         
         self.cursor_file = Path(config_path)
-        self.processed_uris = set()  # Track processed notification URIs
         logger.info(f"Using cursor file: {self.cursor_file}")
 
     def _load_cursor(self):
@@ -33,13 +32,10 @@ class BlueskyTransport:
         else:
             logger.debug("No cursor to save")
 
-    def _is_already_processed(self, notification):
-        """Check if a notification has already been processed to avoid duplicates"""
-        notification_uri = getattr(notification, 'uri', None)
-        if notification_uri and notification_uri in self.processed_uris:
-            logger.debug(f"Skipping already processed notification: {notification_uri}")
-            return True
-        return False
+    def _truncate_text(self, text):
+        """Truncate text to max_length characters if needed."""
+        logger.warning(f"Text too long ({len(text)} chars), truncating to {300} chars")
+        return text[:296] + "..."
 
     def fetch_mentions(self):
         logger.info("Fetching mentions from Bluesky")
@@ -51,17 +47,14 @@ class BlueskyTransport:
         
         res = self.client.app.bsky.notification.list_notifications(**params)
         
-        # Store the new cursor but don't save it yet - only save after successful processing
         self.pending_cursor = getattr(res, "cursor", None)
+        self._save_cursor(self.pending_cursor)
         
         mention_count = 0
         mentions_to_process = []
         
         for n in res.notifications:
             if n.reason == "mention":
-                if self._is_already_processed(n):
-                    continue
-                    
                 mention_count += 1
                 logger.info(f"Found mention from @{getattr(n.author, 'handle', 'unknown')}")
                 mentions_to_process.append(n)
@@ -69,34 +62,12 @@ class BlueskyTransport:
         logger.info(f"Found {mention_count} new mentions to process")
         return mentions_to_process
 
-    def mark_processed(self, notification):
-        """Mark a notification as processed to avoid duplicate replies"""
-        notification_uri = getattr(notification, 'uri', None)
-        if notification_uri:
-            self.processed_uris.add(notification_uri)
-            # Limit the size of processed URIs to prevent memory issues
-            if len(self.processed_uris) > 1000:
-                # Remove oldest half when limit is reached
-                oldest_uris = list(self.processed_uris)[:500]
-                for uri in oldest_uris:
-                    self.processed_uris.remove(uri)
-                logger.info("Cleaned up old processed URIs to prevent memory issues")
-            logger.debug(f"Marked notification as processed: {notification_uri}")
-
-    def commit_progress(self):
-        """Save the cursor after successful processing of all mentions"""
-        if hasattr(self, 'pending_cursor'):
-            self._save_cursor(self.pending_cursor)
-            logger.info("Committed cursor progress after successful processing")
-            delattr(self, 'pending_cursor')
-
     def reply(self, text, reply_to):
         logger.info(f"Sending reply to {getattr(reply_to, 'uri', 'unknown URI')}")
-        logger.debug(f"Reply text: {text[:100]}...")
+        logger.debug(f"Reply text: {len(text)} chars: {text[:100]}...")
         
-        if len(text) > 300:
-            logger.warning(f"Text too long ({len(text)} chars), truncating to 300 chars")
-            text = text[:297] + "..."
+        if len(text) >= 300:
+            text = self._truncate_text(text)
         
         reply_ref = models.AppBskyFeedPost.ReplyRef(
             root=models.ComAtprotoRepoStrongRef.Main(
@@ -109,13 +80,13 @@ class BlueskyTransport:
             )
         )
         self.client.send_post(text, reply_to=reply_ref)
-        logger.info(f"reply_to {reply_to} : {text}")
-        logger.info("Reply sent successfully")
+        logger.info(f"Reply sent {reply_to} : {text}")
 
     def mark_seen(self):
         logger.info("Marking notifications as seen")
-
-        self.client.app.bsky.notification.update_seen({
-            'seen_at': datetime.now().isoformat() + 'Z'
-        })
+        
+        # Use the client's built-in time method for consistency
+        seen_at = self.client.get_current_time_iso()
+        
+        self.client.app.bsky.notification.update_seen({"seenAt": seen_at})
         logger.info("Notifications marked as seen")
