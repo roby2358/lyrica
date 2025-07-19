@@ -8,23 +8,17 @@ Lyrica is an AI-powered social media bot that monitors Bluesky mentions and resp
 
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd lyrica
-   ```
-
-2. Install dependencies using uv:
+1. Install dependencies using uv:
    ```bash
    uv sync
    ```
 
-3. Set up credentials by copying the template:
+2. Set up credentials by copying the template:
    ```bash
    cp credentials.toml.template credentials.toml
    ```
 
-4. Edit `credentials.toml` with your actual API keys:
+3. Edit `credentials.toml` with your actual API keys:
    ```toml
    [bluesky]
    handle = "your-handle.bsky.social"
@@ -66,21 +60,6 @@ Example interaction:
 - `requests` - HTTP client
 - `python-dotenv` - Environment management
 - `tomli/tomllib` - TOML configuration parsing
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the existing code style
-4. Test your changes thoroughly
-5. Submit a pull request
-
-For development, install dev dependencies:
-```bash
-uv sync --dev
-```
-
-This includes pytest, black, and flake8 for testing and code formatting.
 
 ## License
 
