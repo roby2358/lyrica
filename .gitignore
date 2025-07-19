@@ -1,0 +1,5 @@
+# Credentials file containing sensitive information
+credentials.toml
+
+# Cursor file for tracking API pagination state
+cursor.txt

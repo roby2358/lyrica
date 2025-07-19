@@ -11,6 +11,8 @@ dependencies = [
     "atproto",
     "requests", 
     "python-dotenv",
+    "tomli; python_version<'3.11'",
+    "tomllib-w; python_version>='3.11'",
 ]
 
 [project.optional-dependencies]
