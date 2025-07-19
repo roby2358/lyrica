@@ -58,4 +58,4 @@ while True:
     except Exception as e:
         logger.error(f"Error in main loop: {e}")
     
-    time.sleep(20)
+    time.sleep(120)
